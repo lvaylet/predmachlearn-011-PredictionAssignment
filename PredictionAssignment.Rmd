@@ -7,11 +7,11 @@ output: html_document
 
 # Background
 
-Using devices such as *Jawbone Up*, *Nike FuelBand*, and *Fitbit* it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how *much* of a particular activity they do, but they rarely quantify *how well they do it*. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+Using devices such as *Jawbone Up*, *Nike FuelBand* and *Fitbit*, it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how *much* of a particular activity they do, but they rarely quantify *how well they do it*. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
 
 # Objective
 
-The goal of this project is to predict the manner in which the 6 participants did the exercise. This is the "classe" variable in the training set. Any of the other variables can be used to predict with.
+The goal of this project is to predict the manner in which the 6 participants did the exercise. This corresponds to the "classe" variable in the training set. Any of the other variables can be used to predict with.
 
 This report describes how the model is built, how cross validation was used, what the expected out of sample error is, and why the choices were made. The prediction model will also be used to predict 20 different test cases. 
 
@@ -85,4 +85,10 @@ Plot correlation matrix (excluding the "classe" factor we actually want to predi
 corMat <- cor(subset(pml_training, select=-c(classe)))
 corrplot(corMat, order = "FPC", method = "color", type = "lower", tl.cex = 0.5, 
          tl.col = rgb(0, 0, 0))
+```
+
+Find the covariates with a correlation factor greater than 80% (excluding the diagonal that is always equal to 100%)
+
+```{r}
+corMat[(corMat < -0.8 | corMat > 0.8) & corMat != 1]
 ```
