@@ -92,3 +92,9 @@ Find the covariates with a correlation factor greater than 80% (excluding the di
 ```{r}
 corMat[(corMat < -0.8 | corMat > 0.8) & corMat != 1]
 ```
+
+Perform PCA and get the number of principal components necessary for retaining 95% of the variance:
+
+```{r}
+preProcess(subset(pml_training, select=-c(classe)), method="pca")
+```
