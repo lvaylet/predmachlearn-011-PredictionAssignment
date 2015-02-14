@@ -1,0 +1,88 @@
+---
+title: "PredictionAssignment"
+author: "Laurent VAYLET"
+date: "2/13/2015"
+output: html_document
+---
+
+# Background
+
+Using devices such as *Jawbone Up*, *Nike FuelBand*, and *Fitbit* it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how *much* of a particular activity they do, but they rarely quantify *how well they do it*. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+
+# Objective
+
+The goal of this project is to predict the manner in which the 6 participants did the exercise. This is the "classe" variable in the training set. Any of the other variables can be used to predict with.
+
+This report describes how the model is built, how cross validation was used, what the expected out of sample error is, and why the choices were made. The prediction model will also be used to predict 20 different test cases. 
+
+# Libraries
+
+First, load libraries used for data exploration and prediction:
+```{r}
+library(caret)
+library(corrplot)
+```
+
+# Data
+
+If necessary, download the data set for training and testing:
+```{r}
+if (!file.exists("./pml-training.csv")) {
+  download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+                destfile = "./pml-training.csv")
+}
+if (!file.exists("./pml-testing.csv")) {
+  download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+                destfile = "./pml-testing.csv")
+}
+```
+
+Read training and test data sets, replacing any empty value with NA (that will be useful later on when counting NA values):
+
+```{r}
+pml_training <- read.csv("pml-training.csv", na.strings=c("","NA"))
+pml_testing <- read.csv("pml-testing.csv", na.string=c("","NA"))
+```
+
+# Exploration and pre-processing
+
+Display structure of training data set in order to quickly get some insight in a compact form:
+
+```{r}
+str(pml_training)
+```
+
+At first sight, it looks like some covariates contain a lot of NA values. What is the exact proportion of NA values in every covariate?
+
+```{r}
+colSums(is.na(pml_training))/nrow(pml_training)
+```
+
+Wow, it looks lire more than half of the covariates have more than 97% NA values! Should we remove these covariates, or rather the examples they are associated with? Usually, it is better to keep a lot of observations rather than a lot of covariates, as having too many features can lead to overfitting while having too many examples is not that bad. So, in this case, it is better to remove the columns with a lot of NA, rather than removing the rows (using `complete.cases()`, for instance).
+
+So keep only the columns with no NA values, and discard the others:
+
+```{r}
+pml_training <- pml_training[,colSums(is.na(pml_training)) == 0]
+```
+
+Now we are down to `r ncol(pml_training)` covariates (as opposed to 160 at the beginning).
+
+Let's remove some more unnecessary columns (timestamps or factor variables that cannot be used for correlation computing later on):
+
+```{r}
+pml_training <- subset(pml_training, select=-c(X,
+                                               user_name,
+                                               raw_timestamp_part_1,
+                                               raw_timestamp_part_2,
+                                               cvtd_timestamp,
+                                               new_window))
+```
+
+Plot correlation matrix (excluding the "classe" factor we actually want to predict):
+
+```{r, out.width = '\\maxwidth'}
+corMat <- cor(subset(pml_training, select=-c(classe)))
+corrplot(corMat, order = "FPC", method = "color", type = "lower", tl.cex = 0.5, 
+         tl.col = rgb(0, 0, 0))
+```
