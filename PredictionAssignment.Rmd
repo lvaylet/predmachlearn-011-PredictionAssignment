@@ -175,6 +175,8 @@ confusionMatrix(valid.pred, valid$classe)
 
 # Model performance on test dataset
 
+Finally, apply the model to the 20 test cases:
+
 ```{r}
 test.pred <- predict(modelFit, test.pca)
 confusionMatrix(test.pred, test$classe)
