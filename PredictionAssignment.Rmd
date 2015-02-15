@@ -17,30 +17,15 @@ This report describes how the model is built, how cross validation was used, wha
 
 # Approach
 
-1. Download and read training and test data
-2. Remove unnecessary covariates (lot of NA values, user names...)
-3. Split training set for cross-validation
-4. Use PCA to reduce even further the number of covariates
-5. Train a Random Forest model.
-6. Assess model performance (confusion matrix)
-7. Use model on test data
+1. Download and read training/test data
+2. Clean data by removing unnecessary variables (columns with a lot of NA values, user names, timestamps...)
+3. Slice training data for cross-validation
+4. Use PCA to reduce the number of covariates
+5. Train a Random Forest model on dimensionality-reduced training set
+6. Assess model performance on validation set
+7. Assess model performance on test set
 
-Benefits of Random Forests are:
-
-* Accuracy
-* Runs efficiently on large data bases
-* Handles thousands of input variables without variable deletion
-* Gives estimates of what variables are important in the classification
-
-# Libraries
-
-First, load libraries used for data exploration and prediction:
-```{r}
-library(caret)
-library(corrplot)
-```
-
-# Data
+# Data reading
 
 If necessary, download the data set for training and testing:
 ```{r}
@@ -57,22 +42,22 @@ if (!file.exists("./pml-testing.csv")) {
 Read training and test data sets, replacing any empty value with NA (that will be useful later on when counting NA values):
 
 ```{r}
-pml_training <- read.csv("pml-training.csv", na.strings=c("","NA"))
-pml_testing <- read.csv("pml-testing.csv", na.string=c("","NA"))
+training.raw <- read.csv("pml-training.csv", na.strings=c("","NA"))
+testing.raw <- read.csv("pml-testing.csv", na.string=c("","NA"))
 ```
 
-# Exploration and pre-processing
+# Data cleaning
 
 Display structure of training data set in order to quickly get some insight in a compact form:
 
 ```{r}
-str(pml_training)
+str(training.raw)
 ```
 
 At first sight, it looks like some covariates contain a lot of NA values. What is the exact proportion of NA values in every covariate?
 
 ```{r}
-colSums(is.na(pml_training))/nrow(pml_training)
+colSums(is.na(training.raw))/nrow(training.raw)
 ```
 
 Wow, it looks lire more than half of the covariates have more than 97% NA values! Should we remove these covariates, or rather the examples they are associated with? Usually, it is better to keep a lot of observations rather than a lot of covariates, as having too many features can lead to overfitting while having too many examples is not that bad. So, in this case, it is better to remove the columns with a lot of NA, rather than removing the rows (using `complete.cases()`, for instance).
@@ -80,7 +65,9 @@ Wow, it looks lire more than half of the covariates have more than 97% NA values
 So keep only the columns with no NA values, and discard the others:
 
 ```{r}
-pml_training <- pml_training[,colSums(is.na(pml_training)) == 0]
+keep.cols = colSums(is.na(training.raw)) == 0
+training.tidy <- training.raw[, keep.cols]
+testing.tidy <- testing.raw[, keep.cols]
 ```
 
 Now we are down to `r ncol(pml_training)` covariates (as opposed to 160 at the beginning).
@@ -88,33 +75,50 @@ Now we are down to `r ncol(pml_training)` covariates (as opposed to 160 at the b
 Let's remove some more unnecessary columns (timestamps or factor variables that cannot be used for correlation computing later on):
 
 ```{r}
-pml_training <- subset(pml_training, select=-c(X,
-                                               user_name,
-                                               raw_timestamp_part_1,
-                                               raw_timestamp_part_2,
-                                               cvtd_timestamp,
-                                               new_window))
+training.tidy <- subset(training.tidy, select = -c(X,
+                                                   user_name,
+                                                   raw_timestamp_part_1,
+                                                   raw_timestamp_part_2,
+                                                   cvtd_timestamp,
+                                                   new_window,
+                                                   num_window))
+testing.tidy <- subset(testing.tidy, select = -c(X,
+                                                 user_name,
+                                                 raw_timestamp_part_1,
+                                                 raw_timestamp_part_2,
+                                                 cvtd_timestamp,
+                                                 new_window,
+                                                 num_window))
 ```
 
 Now we are just left with `r ncol(pml_training)` compared to 160 for the raw unprocessed data.
 
+# Data slicing
+
 Split the training data into two sets for cross-validation (with the usual 60-40 ratio for training and testing):
 
 ```{r}
-inTrain <- createDataPartition(y=pml_training$class, p=0.6, list=FALSE)
-training <- pml_training[inTrain,]
-testing <- pml_training[-inTrain,]
-dim(training)
-dim(testing)
+library(caret)
+set.seed(12345)
+inTrain <- createDataPartition(y = training.tidy$class, p = 0.6, list = FALSE)
+train <- training.tidy[inTrain, ]
+valid <- training.tidy[-inTrain, ]
+test <- testing.tidy
+dim(train)
+dim(valid)
+dim(test)
 ```
 
-Being left with only `r ncol(pml_training)` covariates is good. However, we can try to reduce this number even further by identifying correlation between covariates and applying Principal Component Analysis to lower the number of features. Even if Random Forest can handle thousands of input variables without variable deletion, computation time is a precious resource.
+# Dimensionality reduction with PCA
 
-So compute and plot correlation matrix to identify correlated features (excluding the "classe" factor we actually want to predict):
+Being left with only `r ncol(train)` covariates is good. However, we can try to reduce this number even further by identifying correlation between covariates and applying Principal Component Analysis to lower the number of features. Even if Random Forest can handle thousands of input variables without variable deletion, computation time is a precious resource.
+
+First, compute and plot correlation matrix to identify potentially correlated features (excluding the "classe" factor we actually want to predict):
 
 ```{r, out.width = '\\maxwidth'}
-corMat <- cor(subset(training, select=-c(classe)))
-corrplot(corMat, order = "FPC", method = "color", type = "lower", tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+library(corrplot)
+corMat <- cor(subset(train, select=-c(classe)))
+corrplot(corMat, method = "color", type = "lower", tl.cex = 0.8)
 ```
 
 Find the covariates with a correlation factor greater than 80% (excluding the diagonal that is always equal to 100%)
@@ -123,52 +127,55 @@ Find the covariates with a correlation factor greater than 80% (excluding the di
 corMat[(corMat < -0.8 | corMat > 0.8) & corMat != 1]
 ```
 
-Now train a Random Forest model using the full training set and a specified seed for reproducible :
+Now perform PCA on all predictors (except the output "classe") and get the number of principal components necessary for retaining 95% of the variance:
 
 ```{r}
-set.seed(1234)
+preProc.pca <- preProcess(subset(train, select = -c(classe)), method  = "pca", thresh = 0.95)
+train.pca <- predict(preProc.pca, subset(train, select = -c(classe)))
+valid.pca <- predict(preProc.pca, subset(valid, select = -c(classe)))
+test.pca <- predict(preProc.pca, subset(test, select = -c(classe)))
+print(preProc.pca)
+```
+
+# Model training and tuning
+
+Now train a Random Forest model using the reduced data from PCA.
+
+Random Forest was chosen as it offers the following benefits:
+
+* Accuracy
+* Runs efficiently on large data bases
+* Handles thousands of input variables without variable deletion
+* Gives estimates of what variables are important in the classification
+
+```{r}
+library(randomForest)
 t1 <- Sys.time()
-modelFit <- train(training$classe ~ ., preProcess=c("center","scale"), method="rf", 
-                  trControl=trainControl(method="cv"), data=training)
+modelFit <- train(train$classe ~ ., method = "rf", trControl = trainControl(method = "cv"), data = train.pca)
 t2 <- Sys.time()
 t2 - t1
 modelFit
 modelFit$finalModel
 ```
 
-Apply model to test data and display confusion matrix:
+Display dotchart of Principal Component importance as measured by Random Forest:
 
 ```{r}
-predictions <- predict(modelFit, testing)
-confusionMatrix(predictions, testing$classe)
+varImpPlot(modelFit, sort = TRUE, main = "Relative importance of Principal Components")
 ```
 
-Now let's try PCA and see if it reduces computation time while keeping the same level of accuracy.
+# Model performance on validation dataset
 
-Perform PCA on all predictors (except the output "classe") and get the number of principal components necessary for retaining 95% of the variance:
+Apply model to validation data and display confusion matrix:
 
 ```{r}
-preProc <- preProcess(subset(training, select=-c(classe)), method=c("center","scale","pca"), thresh=0.95)
-trainingPC <- predict(preProc, subset(training, select=-c(classe)))
+valid.pred <- predict(modelFit, valid.pca)
+confusionMatrix(valid.pred, valid$classe)
 ```
 
-Now train a Random Forest model using the reduced data from PCA and a specified seed for reproducible :
+# Model performance on test dataset
 
 ```{r}
-set.seed(1234)
-t1 <- Sys.time()
-modelFit <- train(training$classe ~ ., method="rf", 
-                  trControl=trainControl(method="cv"), data=trainingPC)
-t2 <- Sys.time()
-t2 - t1
-modelFit
-modelFit$finalModel
-```
-
-Apply model to test data and display confusion matrix:
-
-```{r}
-testingPC <- predict(preProc, subset(testing, select=-c(classe)))
-predictions <- predict(modelFit, testingPC)
-confusionMatrix(predictions, testing$classe)
+test.pred <- predict(modelFit, test.pca)
+confusionMatrix(test.pred, test$classe)
 ```
