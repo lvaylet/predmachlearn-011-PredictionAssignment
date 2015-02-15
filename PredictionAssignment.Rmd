@@ -166,7 +166,7 @@ varImpPlot(modelFit, sort = TRUE, main = "Relative importance of Principal Compo
 
 # Model performance on validation dataset
 
-Apply model to validation data and display confusion matrix:
+Apply the model to the validation data and display the confusion matrix:
 
 ```{r}
 valid.pred <- predict(modelFit, valid.pca)
