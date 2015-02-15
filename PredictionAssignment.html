@@ -67,6 +67,25 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 <p>The goal of this project is to predict the manner in which the 6 participants did the exercise. This corresponds to the “classe” variable in the training set. Any of the other variables can be used to predict with.</p>
 <p>This report describes how the model is built, how cross validation was used, what the expected out of sample error is, and why the choices were made. The prediction model will also be used to predict 20 different test cases.</p>
 </div>
+<div id="approach" class="section level1">
+<h1>Approach</h1>
+<ol style="list-style-type: decimal">
+<li>Download and read training and test data</li>
+<li>Remove unnecessary covariates (lot of NA values, user names…)</li>
+<li>Split training set for cross-validation</li>
+<li>Use PCA to reduce even further the number of covariates</li>
+<li>Train a Random Forest model.</li>
+<li>Assess model performance (confusion matrix)</li>
+<li>Use model on test data</li>
+</ol>
+<p>Benefits of Random Forests are:</p>
+<ul>
+<li>Accuracy</li>
+<li>Runs efficiently on large data bases</li>
+<li>Handles thousands of input variables without variable deletion</li>
+<li>Gives estimates of what variables are important in the classification</li>
+</ul>
+</div>
 <div id="libraries" class="section level1">
 <h1>Libraries</h1>
 <p>First, load libraries used for data exploration and prediction:</p>
@@ -316,7 +335,17 @@ pml_testing &lt;- read.csv(&quot;pml-testing.csv&quot;, na.string=c(&quot;&quot;
                                                raw_timestamp_part_2,
                                                cvtd_timestamp,
                                                new_window))</code></pre>
-<p>Plot correlation matrix (excluding the “classe” factor we actually want to predict):</p>
+<p>Now we are just left with 54 compared to 160 for the raw unprocessed data.</p>
+<p>Split the training data into two sets for cross-validation (with the usual 60-40 ratio for training and testing):</p>
+<pre class="r"><code>inTrain &lt;- createDataPartition(y=pml_training$class, p=0.6, list=FALSE)
+training &lt;- pml_training[inTrain,]
+testing &lt;- pml_training[-inTrain,]
+dim(training)</code></pre>
+<pre><code>## [1] 11776    54</code></pre>
+<pre class="r"><code>dim(testing)</code></pre>
+<pre><code>## [1] 7846   54</code></pre>
+<p>Being left with only 54 covariates is good. However, we can try to reduce this number even further by identifying correlation between covariates and applying Principal Component Analysis to lower the number of features. Even if Random Forest can handle thousands of input variables without variable deletion, computation time is a precious resource.</p>
+<p>So compute and plot correlation matrix to identify correlated features (excluding the “classe” factor we actually want to predict):</p>
 <pre class="r"><code>corMat &lt;- cor(subset(pml_training, select=-c(classe)))
 corrplot(corMat, order = &quot;FPC&quot;, method = &quot;color&quot;, type = &quot;lower&quot;, tl.cex = 0.5, 
          tl.col = rgb(0, 0, 0))</code></pre>
@@ -330,6 +359,16 @@ corrplot(corMat, order = &quot;FPC&quot;, method = &quot;color&quot;, type = &qu
 ## [25]  0.8144455  0.8144455  0.8082885  0.8491322 -0.9789507 -0.9144764
 ## [31] -0.9789507  0.9330422  0.8082885  0.8491322  0.8455626 -0.9144764
 ## [37]  0.9330422  0.8455626</code></pre>
+<p>Perform PCA on all predictors (except the output “classe”) and get the number of principal components necessary for retaining 95% of the variance:</p>
+<pre class="r"><code>preproc &lt;- preProcess(subset(pml_training, select=-c(classe)), method=c(&quot;center&quot;,&quot;scale&quot;,&quot;pca&quot;), thresh=0.95)
+pml_training_PC &lt;- predict(preproc, subset(pml_training, select=-c(classe)))</code></pre>
+<p>Now train a Random Forest model using the reduced data from PCA and a specified seed for reproducible :</p>
+<pre class="r"><code>set.seed(1234)
+#modelFit &lt;- train(pml_training$classe ~ ., method=&quot;rf&quot;, ntree=10, data=pml_training_PC)
+#modelFit$finalModel</code></pre>
+<p>Apply model to test data and display confusion matrix:</p>
+<pre class="r"><code>#pml_testing_PC &lt;- predict(preproc, subset(pml_testing, select=-c(classe)))
+#confusionMatrix(pml_testing$classe, predict(modelFit, pml_training_PC))</code></pre>
 </div>
 
 

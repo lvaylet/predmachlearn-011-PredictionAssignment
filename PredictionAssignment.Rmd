@@ -13,7 +13,24 @@ Using devices such as *Jawbone Up*, *Nike FuelBand* and *Fitbit*, it is now poss
 
 The goal of this project is to predict the manner in which the 6 participants did the exercise. This corresponds to the "classe" variable in the training set. Any of the other variables can be used to predict with.
 
-This report describes how the model is built, how cross validation was used, what the expected out of sample error is, and why the choices were made. The prediction model will also be used to predict 20 different test cases. 
+This report describes how the model is built, how cross validation was used, what the expected out of sample error is, and why the choices were made. The prediction model will also be used to predict 20 different test cases.
+
+# Approach
+
+1. Download and read training and test data
+2. Remove unnecessary covariates (lot of NA values, user names...)
+3. Split training set for cross-validation
+4. Use PCA to reduce even further the number of covariates
+5. Train a Random Forest model.
+6. Assess model performance (confusion matrix)
+7. Use model on test data
+
+Benefits of Random Forests are:
+
+* Accuracy
+* Runs efficiently on large data bases
+* Handles thousands of input variables without variable deletion
+* Gives estimates of what variables are important in the classification
 
 # Libraries
 
@@ -79,12 +96,25 @@ pml_training <- subset(pml_training, select=-c(X,
                                                new_window))
 ```
 
-Plot correlation matrix (excluding the "classe" factor we actually want to predict):
+Now we are just left with `r ncol(pml_training)` compared to 160 for the raw unprocessed data.
+
+Split the training data into two sets for cross-validation (with the usual 60-40 ratio for training and testing):
+
+```{r}
+inTrain <- createDataPartition(y=pml_training$class, p=0.6, list=FALSE)
+training <- pml_training[inTrain,]
+testing <- pml_training[-inTrain,]
+dim(training)
+dim(testing)
+```
+
+Being left with only `r ncol(pml_training)` covariates is good. However, we can try to reduce this number even further by identifying correlation between covariates and applying Principal Component Analysis to lower the number of features. Even if Random Forest can handle thousands of input variables without variable deletion, computation time is a precious resource.
+
+So compute and plot correlation matrix to identify correlated features (excluding the "classe" factor we actually want to predict):
 
 ```{r, out.width = '\\maxwidth'}
-corMat <- cor(subset(pml_training, select=-c(classe)))
-corrplot(corMat, order = "FPC", method = "color", type = "lower", tl.cex = 0.5, 
-         tl.col = rgb(0, 0, 0))
+corMat <- cor(subset(training, select=-c(classe)))
+corrplot(corMat, order = "FPC", method = "color", type = "lower", tl.cex = 0.8, tl.col = rgb(0, 0, 0))
 ```
 
 Find the covariates with a correlation factor greater than 80% (excluding the diagonal that is always equal to 100%)
@@ -93,8 +123,27 @@ Find the covariates with a correlation factor greater than 80% (excluding the di
 corMat[(corMat < -0.8 | corMat > 0.8) & corMat != 1]
 ```
 
-Perform PCA and get the number of principal components necessary for retaining 95% of the variance:
+Perform PCA on all predictors (except the output "classe") and get the number of principal components necessary for retaining 95% of the variance:
 
 ```{r}
-preProcess(subset(pml_training, select=-c(classe)), method="pca")
+#preproc <- preProcess(subset(training, select=-c(classe)), method=c("center","scale","pca"), thresh=0.95)
+#trainingPC <- predict(preproc, subset(training, select=-c(classe)))
+```
+
+Now train a Random Forest model using the reduced data from PCA and a specified seed for reproducible :
+
+```{r}
+set.seed(1234)
+modelFit <- train(training$classe ~ ., preProcess=c("center","scale"), method="rf", 
+                  trControl=trainControl(method="cv"), data=training)
+modelFit
+modelFit$finalModel
+```
+
+Apply model to test data and display confusion matrix:
+
+```{r}
+predictions <- predict(modelFit, testing)
+#testingPC <- predict(preproc, subset(testing, select=-c(classe)))
+confusionMatrix(predictions, testing$classe)
 ```
