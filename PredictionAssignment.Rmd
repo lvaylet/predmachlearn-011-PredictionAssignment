@@ -123,19 +123,15 @@ Find the covariates with a correlation factor greater than 80% (excluding the di
 corMat[(corMat < -0.8 | corMat > 0.8) & corMat != 1]
 ```
 
-Perform PCA on all predictors (except the output "classe") and get the number of principal components necessary for retaining 95% of the variance:
-
-```{r}
-#preproc <- preProcess(subset(training, select=-c(classe)), method=c("center","scale","pca"), thresh=0.95)
-#trainingPC <- predict(preproc, subset(training, select=-c(classe)))
-```
-
-Now train a Random Forest model using the reduced data from PCA and a specified seed for reproducible :
+Now train a Random Forest model using the full training set and a specified seed for reproducible :
 
 ```{r}
 set.seed(1234)
+t1 <- Sys.time()
 modelFit <- train(training$classe ~ ., preProcess=c("center","scale"), method="rf", 
                   trControl=trainControl(method="cv"), data=training)
+t2 <- Sys.time()
+t2 - t1
 modelFit
 modelFit$finalModel
 ```
@@ -144,6 +140,35 @@ Apply model to test data and display confusion matrix:
 
 ```{r}
 predictions <- predict(modelFit, testing)
-#testingPC <- predict(preproc, subset(testing, select=-c(classe)))
+confusionMatrix(predictions, testing$classe)
+```
+
+Now let's try PCA and see if it reduces computation time while keeping the same level of accuracy.
+
+Perform PCA on all predictors (except the output "classe") and get the number of principal components necessary for retaining 95% of the variance:
+
+```{r}
+preProc <- preProcess(subset(training, select=-c(classe)), method=c("center","scale","pca"), thresh=0.95)
+trainingPC <- predict(preProc, subset(training, select=-c(classe)))
+```
+
+Now train a Random Forest model using the reduced data from PCA and a specified seed for reproducible :
+
+```{r}
+set.seed(1234)
+t1 <- Sys.time()
+modelFit <- train(training$classe ~ ., method="rf", 
+                  trControl=trainControl(method="cv"), data=trainingPC)
+t2 <- Sys.time()
+t2 - t1
+modelFit
+modelFit$finalModel
+```
+
+Apply model to test data and display confusion matrix:
+
+```{r}
+testingPC <- predict(preProc, subset(testing, select=-c(classe)))
+predictions <- predict(modelFit, testingPC)
 confusionMatrix(predictions, testing$classe)
 ```
