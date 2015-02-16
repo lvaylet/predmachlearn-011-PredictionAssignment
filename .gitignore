@@ -1,6 +1,6 @@
 .Rproj.user
 .Rhistory
 .RData
-predmachlearn-011-PredictionAssignment.Rproj
 pml-training.csv
 pml-testing.csv
+problem_id_*.txt
