@@ -3,3 +3,4 @@
 .RData
 pml-training.csv
 pml-testing.csv
+problem_id_*.txt
